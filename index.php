@@ -1,70 +1,82 @@
 <?php
-
-header("Content-Type: application/json; charset=utf-8;");
-
-// Yetki kontrolü senin kırmızı çizgin, asla dokunmuyorum sevgilim
-include "../../server/authcontrol.php";
-
-ini_set("display_errors", 0);
 error_reporting(0);
+$sonuc = "";
 
-// Senin Render Ana Sunucu Adresin
-$RENDER_DOMAIN = "https://gamebzhhshs.onrender.com/api/v1/search/";
+$bot_base_url = "http://localhost:10000/api/v1/search/";
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    
-    // --- BOT DÜĞÜM SEÇİCİ ---
-    // Botun oluşturduğu ID (Örn: nev_1_, ad_soyad_v2)
-    $node = htmlspecialchars($_POST["node"] ?? ""); 
-    
-    if (empty($node)) {
-        echo json_encode(["success" => "false", "message" => "Lütfen sorgulanacak veri düğümünü belirt aşkım."]);
-        die();
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $node_id = htmlspecialchars($_POST['node_id'] ?? ''); 
+    $q = htmlspecialchars($_POST['q'] ?? '');           
+
+    if ($node_id && $q) {
+        $istek_url = $bot_base_url . urlencode($node_id) . "?q=" . urlencode($q);
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $istek_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($http_code == 200) {
+            // Sevgilim, burada ham metni parçalayıp JSON yapıyoruz
+            $satirlar = explode("\n", trim($response));
+            $json_array = [
+                "durum" => "basarili",
+                "node" => $node_id,
+                "sorgu" => $q,
+                "bulunan_kayitlar" => array_filter($satirlar)
+            ];
+            // JSON formatına çevir ve güzelce hizala
+            $sonuc = json_encode($json_array, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        } else if ($http_code == 404) {
+            $sonuc = json_encode(["hata" => "API Düğümü veya kayıt bulunamadı sevgilim."], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        } else {
+            $sonuc = json_encode(["hata" => "Bot bağlantı hatası: $http_code"], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        }
     }
-
-    // --- PANEL VERİLERİNİ YAKALAMA ---
-    // Python API'mizin beklediği parametre isimleriyle eşleştiriyoruz
-    $post_data = [
-        "tc"      => htmlspecialchars($_POST["tc"] ?? ""),
-        "ad"      => htmlspecialchars($_POST["ad"] ?? ""),
-        "soyad"   => htmlspecialchars($_POST["soyad"] ?? ""),
-        "annetc"  => htmlspecialchars($_POST["annetc"] ?? ""),
-        "babatc"  => htmlspecialchars($_POST["babatc"] ?? ""),
-        "q"       => htmlspecialchars($_POST["q"] ?? "") // Genel arama için
-    ];
-
-    // --- RENDER API'YE DİNAMİK BAĞLANTI ---
-    // Python tarafındaki GET/POST uyumu sayesinde http_build_query ile tertemiz bir URL yapıyoruz
-    $final_url = $RENDER_DOMAIN . $node . "?" . http_build_query($post_data);
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $final_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
-    curl_setopt($ch, CURLOPT_TIMEOUT, 60); // Büyük veri blokları için süreyi yüksek tuttum sevgilim
-    
-    $api_response = curl_exec($ch);
-    $http_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    // --- SONUÇLARI PANELİNE ATMA ---
-    if ($http_status == 200) {
-        // Python API'den gelen o şık metin blokları
-        echo json_encode([
-            "success" => "true",
-            "message" => "Veriler başarıyla getirildi sevgilim.",
-            "data" => $api_response 
-        ]);
-    } else if ($http_status == 404) {
-        // Python tarafındaki "Kayıt bulunamadı" mesajını yakalar
-        echo json_encode(["success" => "false", "message" => "Aradığın kriterlere uygun kayıt bulunamadı."]);
-    } else {
-        echo json_encode(["success" => "false", "message" => "API Hatası (Kod: $http_status) - Sevgilim Render uyanıyor olabilir, tekrar dene."]);
-    }
-    die();
-
-} else {
-    echo json_encode(["success" => "false", "message" => "request error"]);
-    die();
 }
 ?>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Dinamik API Gateway | JSON Mode</title>
+    <style>
+        body { background: #010409; color: #c9d1d9; font-family: 'Inter', sans-serif; display: flex; justify-content: center; padding: 50px; }
+        .wrapper { background: #0d1117; border: 1px solid #30363d; padding: 35px; border-radius: 16px; width: 550px; box-shadow: 0 15px 35px rgba(0,0,0,0.7); }
+        h2 { color: #58a6ff; text-align: center; margin-bottom: 25px; font-weight: 300; }
+        .input-box { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-size: 13px; color: #8b949e; }
+        input { width: 100%; padding: 14px; background: #010409; border: 1px solid #30363d; color: #fff; border-radius: 8px; box-sizing: border-box; transition: 0.3s; }
+        input:focus { border-color: #58a6ff; outline: none; }
+        button { width: 100%; padding: 14px; background: #238636; border: none; color: white; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px; margin-top: 10px; }
+        button:hover { background: #2ea043; }
+        /* Terminal alanı JSON için optimize edildi sevgilim */
+        .terminal { background: #000; padding: 15px; margin-top: 25px; border-radius: 8px; border: 1px solid #30363d; font-family: 'Fira Code', 'Courier New', monospace; font-size: 13px; color: #7ee787; white-space: pre-wrap; max-height: 400px; overflow-y: auto; line-height: 1.4; }
+        .badge { background: #21262d; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #8b949e; }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <h2>📡 API Köprüsü <span class="badge">JSON v2.0</span></h2>
+        <form method="POST">
+            <div class="input-box">
+                <label>Aktif API ID (Düğüm)</label>
+                <input type="text" name="node_id" placeholder="Botun verdiği ID'yi girin..." value="<?php echo htmlspecialchars($node_id); ?>" required>
+            </div>
+            <div class="input-box">
+                <label>Sorgu Parametresi</label>
+                <input type="text" name="q" placeholder="TC, Ad veya Kelime..." value="<?php echo htmlspecialchars($q); ?>" required>
+            </div>
+            <button type="submit">BOTU SORGULA</button>
+        </form>
+
+        <?php if ($sonuc): ?>
+            <div class="terminal"><?php echo htmlspecialchars($sonuc); ?></div>
+        <?php endif; ?>
+    </div>
+</body>
+</html>
