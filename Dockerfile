@@ -1,24 +1,18 @@
-# Hafif ve hızlı Python tabanı
-FROM python:3.9-slim
+# PHP ve Apache sunucusunu içeren resmi imaj
+FROM php:8.1-apache
 
-# Çalışma dizinini belirle
-WORKDIR /app
+# Çalışma dizinini Apache'nin ana klasörü yap
+WORKDIR /var/www/html
 
-# Sistem bağımlılıklarını güncelle
-RUN apt-get update && apt-get install -y --no-install-recursions \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Kütüphane listesini kopyala ve kur
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Tüm bot ve API kodlarını içeri al
+# GitHub'daki tüm dosyaları (encel.php dahil) içeri kopyala
 COPY . .
 
-# Render'ın varsayılan portunu aç
+# Render'ın portu ile Apache'nin portunu (80) eşitlemek için
+# Apache'nin portunu 10000 yapıyoruz (Render'ın sevdiği port)
+RUN sed -i 's/80/10000/g' /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
+
+# Apache'yi dış dünyaya aç
 EXPOSE 10000
 
-# Gunicorn ile sistemi mermi gibi çalıştır
-# PHP'den gelen eşzamanlı istekleri karşılamak için 4 worker ekledim sevgilim
-CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--workers", "4", "--timeout", "120", "main:app"]
+# Apache sunucusunu başlat
+CMD ["apache2-foreground"]
